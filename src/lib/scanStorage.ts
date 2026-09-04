@@ -60,8 +60,12 @@ function migrateLegacySessionScan(): StoredScanResult | null {
   }
 }
 
+// In-memory fallback in case localStorage is constrained or restricted
+const inMemoryScanCache = new Map<string, StoredScanResult>();
+
 export function saveScanResult(result: StoredScanResult) {
   if (typeof window === "undefined") return;
+  inMemoryScanCache.set(result.id, result);
   try {
     const payload = JSON.stringify(result);
     localStorage.setItem(scanItemKey(result.id), payload);
@@ -71,12 +75,37 @@ export function saveScanResult(result: StoredScanResult) {
     const next = [result.id, ...ids.filter((id) => id !== result.id)];
     persistScanIndex(next);
   } catch {
+    // If quota exceeded, remove older scans and retry
+    try {
+      const ids = loadScanIndex();
+      const olderIds = ids.slice(5);
+      olderIds.forEach((oldId) => {
+        try {
+          localStorage.removeItem(scanItemKey(oldId));
+        } catch {}
+      });
+      persistScanIndex([result.id, ...ids.slice(0, 5)]);
+      const payload = JSON.stringify(result);
+      localStorage.setItem(scanItemKey(result.id), payload);
+      localStorage.setItem(SCAN_RESULT_STORAGE_KEY, payload);
+    } catch {
+      // If still failing, save analysis without the heavy image preview
+      try {
+        const withoutPreview = { ...result, imagePreview: null };
+        const payload = JSON.stringify(withoutPreview);
+        localStorage.setItem(scanItemKey(result.id), payload);
+        localStorage.setItem(SCAN_RESULT_STORAGE_KEY, payload);
+      } catch {}
+    }
   }
 }
 
 export function loadScanResultById(id: string): StoredScanResult | null {
   if (typeof window === "undefined") return null;
   migrateLegacySessionScan();
+
+  const cached = inMemoryScanCache.get(id);
+  if (cached) return cached;
 
   const fromId = readJson<StoredScanResult>(
     localStorage.getItem(scanItemKey(id)),

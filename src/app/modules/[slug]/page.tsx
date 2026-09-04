@@ -8,6 +8,7 @@ import { ArrowLeft, BookOpen, ChevronRight } from "lucide-react";
 import { MathText } from "@/components/MathText";
 import { MagneticCard } from "@/components/dashboard/MagneticCard";
 import { TaskScannerPanel } from "@/components/dashboard/TaskScannerPanel";
+import SiteFooter from "@/components/SiteFooter";
 import { getModuleBySlug, learningModules } from "@/data/modulesCatalog";
 
 const spring = { type: "spring" as const, stiffness: 260, damping: 20 };
@@ -169,6 +170,7 @@ export default function ModulePage() {
           ) : null}
         </AnimatePresence>
       </motion.main>
+      <SiteFooter />
     </div>
   );
 }

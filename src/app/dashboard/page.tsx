@@ -15,6 +15,7 @@ import { SkillTreeWidget } from "@/components/dashboard/SkillTreeWidget";
 import { ScanHistoryPanel } from "@/components/dashboard/ScanHistoryPanel";
 import { GoalsDeadlinesWidget } from "@/components/dashboard/GoalsDeadlinesWidget";
 import { TaskScannerPanel } from "@/components/dashboard/TaskScannerPanel";
+import SiteFooter from "@/components/SiteFooter";
 import {
   getProfileInitials,
   loadStudentProfile,
@@ -258,6 +259,7 @@ export default function DashboardPage() {
           <ScanHistoryPanel />
         </motion.section>
       </motion.main>
+      <SiteFooter />
     </div>
   );
 }

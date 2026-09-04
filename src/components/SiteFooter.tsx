@@ -1,6 +1,12 @@
+"use client";
+
+import { useDemoMode } from "@/lib/demoMode";
+
 export default function SiteFooter() {
+  const { isDemo, toggleDemo } = useDemoMode();
+
   return (
-    <footer className="border-t border-slate-100 py-8 bg-white">
+    <footer className="border-t border-slate-100 py-6 bg-white">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
         <div className="order-2 sm:order-1">© 2026 Treever. Все права защищены.</div>
 
@@ -9,9 +15,21 @@ export default function SiteFooter() {
         </div>
 
         <div className="order-3 font-mono text-slate-500">
-           Site is working
+          Site is working
         </div>
+      </div>
+
+      {/* Inconspicuous clickable text in the corner */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 mt-3 flex justify-end">
+        <button
+          type="button"
+          onClick={toggleDemo}
+          className="text-[10px] font-mono text-slate-300 hover:text-slate-500 transition-colors cursor-pointer select-none bg-transparent p-0 border-0 outline-none"
+        >
+          {isDemo ? "it is demo mode" : "turn on demo mode"}
+        </button>
       </div>
     </footer>
   );
 }
+

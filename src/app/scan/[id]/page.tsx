@@ -9,6 +9,7 @@ import { KnowledgeTreeSvg } from "@/components/KnowledgeTree";
 import { MathText } from "@/components/MathText";
 import { NodeDetailPopup } from "@/components/NodeDetailPopup";
 import { loadScanResultById, type StoredScanResult } from "@/lib/scanStorage";
+import SiteFooter from "@/components/SiteFooter";
 import { mapAnalysisToTreeNodes } from "@/lib/treeTips";
 import type { PlacedTreeNode } from "@/types/scan";
 
@@ -225,6 +226,7 @@ export default function ScanPage() {
           </div>
         </motion.section>
       </main>
+      <SiteFooter />
     </div>
   );
 }

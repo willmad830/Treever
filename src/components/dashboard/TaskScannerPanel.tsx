@@ -3,10 +3,12 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
-import { Camera, Edit3, Sparkles, Upload } from "lucide-react";
+import { Camera, Edit3, History, Sparkles, Upload } from "lucide-react";
 import { analyzeSolutionWithAI } from "@/services/aiService";
 import { saveScanResult } from "@/lib/scanStorage";
 import { syncGoalsAfterScan } from "@/lib/goalProgressSync";
+import { RecentScansModal } from "@/components/dashboard/RecentScansModal";
+import type { ScanAnalysis } from "@/types/scan";
 
 const spring = { type: "spring" as const, stiffness: 260, damping: 20 };
 
@@ -62,6 +64,58 @@ function fileToDataUrl(file: File) {
   });
 }
 
+async function processImageFile(file: File): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    return fileToDataUrl(file);
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      try {
+        const maxDim = 1600;
+        let { width, height } = img;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) {
+          fileToDataUrl(file).then(resolve).catch(reject);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        resolve(dataUrl);
+      } catch {
+        fileToDataUrl(file).then(resolve).catch(reject);
+      }
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      fileToDataUrl(file).then(resolve).catch(reject);
+    };
+
+    img.src = objectUrl;
+  });
+}
+
 export function TaskScannerPanel({
   defaultManualText = "",
   manualPlaceholder = "Введите условие задачи или уравнение (например: 2(x - 3) = 10)...",
@@ -80,6 +134,35 @@ export function TaskScannerPanel({
   const [isHoveringDropzone, setIsHoveringDropzone] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [showRecentModal, setShowRecentModal] = useState(false);
+
+  const handleSelectRecentScan = async (item: {
+    imagePreview: string;
+    analysis: ScanAnalysis;
+  }) => {
+    setShowRecentModal(false);
+    if (isScanning) return;
+    setIsScanning(true);
+    setScanError(null);
+
+    try {
+      // 2-second timeout as requested for jury demonstration
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const id = `scan-${Date.now()}`;
+      const stored = {
+        id,
+        createdAt: Date.now(),
+        imagePreview: item.imagePreview,
+        analysis: item.analysis,
+      };
+      saveScanResult(stored);
+      syncGoalsAfterScan(stored);
+      router.push(`/scan/${id}`);
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : "Ошибка анализа");
+      setIsScanning(false);
+    }
+  };
 
   const runAnalysisAndRedirect = async (input: {
     image?: string;
@@ -120,10 +203,20 @@ export function TaskScannerPanel({
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
-    event.target.value = "";
     if (!file) return;
-    const image = await fileToDataUrl(file);
-    await runAnalysisAndRedirect({ image, preview: image });
+
+    try {
+      const image = await processImageFile(file);
+      await runAnalysisAndRedirect({ image, preview: image });
+    } catch (err) {
+      setScanError(
+        err instanceof Error ? err.message : "Ошибка обработки файла",
+      );
+    } finally {
+      if (event.target) {
+        event.target.value = "";
+      }
+    }
   };
 
   const handleManualSubmit = async () => {
@@ -138,47 +231,68 @@ export function TaskScannerPanel({
   const handleDropFiles = async (files: FileList | null) => {
     const file = files?.[0];
     if (!file) return;
-    const image = await fileToDataUrl(file);
-    await runAnalysisAndRedirect({ image, preview: image });
+    try {
+      const image = await processImageFile(file);
+      await runAnalysisAndRedirect({ image, preview: image });
+    } catch (err) {
+      setScanError(
+        err instanceof Error ? err.message : "Ошибка обработки файла",
+      );
+    }
   };
 
   return (
     <>
-      <div className="inline-flex w-full rounded-2xl border border-black/5 bg-slate-50/90 p-1 backdrop-blur-sm sm:w-auto">
-        {modes.map((item) => {
-          const Icon = item.icon;
-          const active = mode === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setMode(item.id)}
-              className="relative flex-1 cursor-pointer sm:flex-none"
-            >
-              {active ? (
-                <motion.span
-                  layoutId={layoutId}
-                  className="absolute inset-0 rounded-xl border border-black/5 bg-white shadow-sm"
-                  transition={spring}
-                />
-              ) : null}
-              <span
-                className={`relative z-10 flex items-center justify-center gap-2 px-3.5 py-2.5 text-sm font-medium transition-colors ${
-                  active ? "text-slate-950" : "text-slate-500"
-                }`}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="inline-flex w-full rounded-2xl border border-black/5 bg-slate-50/90 p-1 backdrop-blur-sm sm:w-auto">
+          {modes.map((item) => {
+            const Icon = item.icon;
+            const active = mode === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setMode(item.id)}
+                className="relative flex-1 cursor-pointer sm:flex-none"
               >
-                <Icon className="h-4 w-4" strokeWidth={1.75} />
-                <span className="whitespace-nowrap">{item.label}</span>
-              </span>
-            </button>
-          );
-        })}
+                {active ? (
+                  <motion.span
+                    layoutId={layoutId}
+                    className="absolute inset-0 rounded-xl border border-black/5 bg-white shadow-sm"
+                    transition={spring}
+                  />
+                ) : null}
+                <span
+                  className={`relative z-10 flex items-center justify-center gap-2 px-3.5 py-2.5 text-sm font-medium transition-colors ${
+                    active ? "text-slate-950" : "text-slate-500"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" strokeWidth={1.75} />
+                  <span className="whitespace-nowrap">{item.label}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Quick sample scan button for jury */}
+        <button
+          type="button"
+          onClick={() => setShowRecentModal(true)}
+          disabled={isScanning}
+          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-black/5 bg-slate-50/90 hover:bg-slate-100/90 px-3.5 py-2.5 text-xs sm:text-sm font-medium text-slate-700 hover:text-slate-950 transition-colors shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Выбрать готовый скан решения (для жюри)"
+        >
+          <History className="h-4 w-4 text-slate-500" strokeWidth={1.75} />
+          <span>Выбрать из последних сканов</span>
+        </button>
       </div>
 
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,.pdf"
+        accept={mode === "camera" ? "image/*" : "image/*,.pdf"}
+        capture={mode === "camera" ? "environment" : undefined}
         className="hidden"
         onChange={handleFileChange}
       />
@@ -367,6 +481,19 @@ export function TaskScannerPanel({
                 {isScanning ? "Анализ..." : dropzoneLabel}
               </motion.button>
 
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setShowRecentModal(true);
+                }}
+                disabled={isScanning}
+                className="relative z-10 inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 transition-colors underline decoration-slate-300 underline-offset-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <History className="h-3.5 w-3.5" />
+                Или выбрать из последних сканов
+              </button>
+
               <p className="max-w-sm text-center text-xs leading-relaxed text-slate-400 sm:text-sm">
                 Перетащите фото с решением задачи или введите условие вручную
               </p>
@@ -374,6 +501,12 @@ export function TaskScannerPanel({
           )}
         </AnimatePresence>
       </div>
+
+      <RecentScansModal
+        open={showRecentModal}
+        onClose={() => setShowRecentModal(false)}
+        onSelectScan={handleSelectRecentScan}
+      />
     </>
   );
 }
