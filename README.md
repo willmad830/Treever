@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Treever
 
-## Getting Started
+**Найди корень ошибки за 30 секунд - учись без пробелов в знаниях.**
 
-First, run the development server:
+Трек **Social Impact** · Future Minds Hackathon 2026
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Школьник фотографирует решение. Система не ставит «неверно», а разворачивает цепочку тем от текущей программы вниз по классам и показывает первопричину на живом дереве пробелов.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Архитектура и стек
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Слой | Технология | Роль |
+| --- | --- | --- |
+| Фреймворк | Next.js 16 (App Router) | Страницы кабинетов, `POST /api/scan` |
+| UI | React 19, TypeScript | Клиентские сценарии ученика и учителя |
+| Стили | Tailwind CSS 4, Geist | Светлый UI, кириллица |
+| Анимация | Framer Motion | Прорастание SVG-веток, spring UI |
+| Формулы | KaTeX | Условие / решение / разбор |
+| Иконки | lucide-react | Сканер, навигация |
+| AI | Gemini (`@google/generative-ai`) | Разбор фото/текста → JSON-граф пробелов |
+| Persist (MVP) | `localStorage` | Сканы, профиль диагностики, материалы учителя |
 
-## Learn More
+**Паттерн:** тонкий AI-gateway + доменный маппинг JSON → фиксированная SVG-геометрия дерева. Граф **не** на React Flow.
 
-To learn more about Next.js, take a look at the following resources:
+**Маршруты:** `/` · `/diagnostic` · `/dashboard` · `/scan/[id]` · `/modules/[slug]` · `/teacher` · `/teacher/student/[id]`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Ссылка на рабочий продукт
 
-## Deploy on Vercel
+**Live:** https://treever.vercel.app
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Документирование 20% AI-кода (Шаг 5.1.3)
+
+Правило 8.1: модель используется как распознающий контур. Раскладка дерева, кабинеты и геометрический движок — handwritten.
+
+### Handwritten Logic
+
+| Модуль | Зачем |
+| --- | --- |
+| `src/lib/nativeLimbPaths.ts` | Семпл кубических SVG-путей, цепочки tip→trunk |
+| `src/lib/treeTips.ts` | `mapAnalysisToTreeNodes`: класс / root-cause → слоты на ветке |
+| `src/components/KnowledgeTree.tsx` | Ствол, pathLength-рост, орбы, HTML hit-area |
+| `src/components/MathText.tsx` | LaTeX-острова в русском тексте |
+| `src/lib/scanStorage.ts` + кабинеты | История сканов, учитель/ученик, цели |
+| `src/lib/goalsBuilder.ts`, `goalProgressSync.ts` | Дедлайны и прогресс после скана |
+| `src/app/diagnostic/page.tsx` + `diagnosticMock.ts` | Входной тест без модели |
+
+### AI-Core (~20%)
+
+| Модуль | Зачем |
+| --- | --- |
+| `src/services/geminiScan.ts` | Серверный вызов Gemini, разбор JSON |
+| `src/app/api/scan/route.ts` | HTTP-вход: image data URL и/или text |
+| `src/config/aiConfig.ts` | Ключ, модель, system/user prompt из env |
+| `src/services/aiService.ts` | Клиентский `fetch("/api/scan")` |
+| Каркас Next | Бутстрап приложения, не предметная логика |
+
+ИИ **не** генерирует path `d` и **не** считает x/y узлов. Он возвращает `nodes[]` / `edges[]` / `target_topic` / `root_error_node_id`; клиент сажает узлы на заранее заданные конечности дерева.
+
+---
